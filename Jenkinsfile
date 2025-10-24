@@ -40,11 +40,64 @@ pipeline {
         archiveArtifacts artifacts: 'reports/requirements-freeze.txt'
       }
     }
+
+    stage('Unit Tests (pytest)') {
+  agent {
+    docker { image 'python:3.11-slim' }
+  }
+  steps {
+    // make sure we fail fast on any command error
+    sh '''
+      set -euo pipefail
+
+      # Go to backend where tests and requirements live
+      cd backend
+
+      # Create/activate a venv inside the container (keeps deps isolated)
+      python -m venv .venv
+      . .venv/bin/activate
+
+      # Upgrade pip and install runtime + test deps
+      pip install --upgrade pip
+      pip install -r requirements.txt || true
+      # Ensure testing libs present (safe to install even if already in requirements)
+      pip install pytest pytest-mock pytest-cov
+
+      # Ensure workspace reports dir exists on the host workspace
+      mkdir -p ../reports
+
+      # Run pytest: produce junit XML and coverage HTML/xml outputs
+      pytest -q --maxfail=1 \
+        --junitxml=../reports/pytest-results.xml \
+        --cov=./ \
+        --cov-report=xml:../reports/coverage.xml \
+        --cov-report=term
+
+      # Save list of installed packages for debugging if needed
+      pip freeze > ../reports/requirements-freeze-tests.txt
+    '''
+
+    // stash results so later stages or archive step can access them outside the container
+    stash includes: 'reports/**', name: 'test-reports'
+  }
+
+
+
+    
   }
 
   post {
+    always {
+      // make test artifacts available to the Jenkins master/workspace
+      unstash 'test-reports'
+      archiveArtifacts artifacts: 'reports/**/*', allowEmptyArchive: false
+
+      // Publish JUnit results so Jenkins shows test status
+      junit allowEmptyResults: false, testResults: 'reports/pytest-results.xml'
+    }
     failure {
       echo "Dependency install or build failed — check pip output above."
+      echo "Unit tests failed — see reports/pytest-results.xml and console log for details."
     }
   }
 }
