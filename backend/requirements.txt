@@ -1,14 +1,27 @@
+# Web framework
 fastapi==0.95.0
 uvicorn[standard]==0.22.0
+
+# Database
 SQLAlchemy==2.0.19
-databases==0.9.0              # optional
-psycopg2-binary==2.9.7        # only if you use Postgres locally
+databases==0.9.0            # optional
+psycopg2-binary==2.9.7      # only if using PostgreSQL
+
+# Testing
 pytest==7.4.0
 pytest-mock==3.10.0
-requests==2.31.0
-flake8==6.0.0                 # lint (optional)
-bandit==1.8.1                 # security scan (optional)
 pytest-cov
-jinja2
-python-multipart==0.0.6
+
+# HTTP requests for tests
+requests==2.31.0
 httpx==0.24.1
+
+# Linting & security
+flake8==6.0.0
+bandit==1.8.1
+
+# Templates
+jinja2
+
+# Multipart for FastAPI forms
+python-multipart
