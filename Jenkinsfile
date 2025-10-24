@@ -23,15 +23,13 @@ pipeline {
       . .venv/bin/activate
       pip install --upgrade pip
       pip install -r requirements.txt
-     pip freeze > \$WORKSPACE/reports/requirements-freeze.txt
-      python -c "import fastapi; print('fastapi OK', fastapi.__vers
+      # Create reports directory in workspace root
+      mkdir -p $WORKSPACE/reports
+      pip freeze > $WORKSPACE/reports/requirements-freeze.txt
 
-      # Smoke test
-      python -c "import fastapi; print('fastapi OK', fastapi.__version__)"
-     
-    
-        
-   '''
+        # Quick smoke test
+        python -c "import fastapi; print('fastapi OK', fastapi.__version__)"
+    '''
   }
 }
     
@@ -46,4 +44,3 @@ pipeline {
     }
   }
 }
-
