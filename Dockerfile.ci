@@ -1,0 +1,23 @@
+# Use official Python 3.11 slim base
+FROM python:3.11-slim
+
+# Set environment variables to avoid prompts and disable pip version checks
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+# Set working directory
+WORKDIR /app
+
+# Copy requirements.txt into the image
+COPY backend/requirements.txt .
+
+# Install all dependencies (FastAPI, testing libs, etc.)
+RUN python -m pip install --upgrade pip setuptools wheel \
+    && python -m pip install -r requirements.txt
+
+# Expose port for FastAPI app (optional)
+EXPOSE 8000
+
+# Default command (optional, can be overridden by pipeline)
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
