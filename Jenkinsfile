@@ -29,7 +29,7 @@ pipeline {
       # Smoke test
       python -c "import fastapi; print('fastapi OK', fastapi.__version__)"
      
-    ls -la reports || echo "reports folder not found"  # Optional debug
+    
         
    '''
   }
