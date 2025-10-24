@@ -24,8 +24,8 @@ pipeline {
       pip install --upgrade pip
       pip install -r requirements.txt
       # Create reports directory in workspace root
-      mkdir -p $WORKSPACE/reports
-      pip freeze > $WORKSPACE/reports/requirements-freeze.txt
+      mkdir -p reports
+      pip freeze > reports/requirements-freeze.txt
 
         # Quick smoke test
         python -c "import fastapi; print('fastapi OK', fastapi.__version__)"
@@ -37,7 +37,7 @@ pipeline {
 
   post {
     always {
-      archiveArtifacts artifacts: 'reports/requirements-freeze.txt', allowEmptyArchive: true
+      archiveArtifacts artifacts: 'backend/reports/requirements-freeze.txt', allowEmptyArchive: true
     }
     failure {
       echo "Dependency install or build failed — check pip output above."
