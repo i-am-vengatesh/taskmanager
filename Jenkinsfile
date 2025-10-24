@@ -69,63 +69,54 @@ pipeline {
     }
 
     stage('Unit Tests (pytest)') {
-  agent {
-    docker {
-      image 'python:3.11-slim'
-      args '-e HTTP_PROXY=$HTTP_PROXY -e HTTPS_PROXY=$HTTPS_PROXY -e NO_PROXY=$NO_PROXY'
+    agent {
+        docker { image 'python:3.11-slim' }
     }
-  }
-  steps {
-    sh '''
-      set -euo pipefail
+    steps {
+        sh '''
+            set -euo pipefail
 
-      mkdir -p "${WORKSPACE}/.cache/pip"
-      export PIP_CACHE_DIR="${WORKSPACE}/.cache/pip"
-      export PIP_DISABLE_PIP_VERSION_CHECK=1
+            mkdir -p "${WORKSPACE}/.cache/pip"
+            export PIP_CACHE_DIR="${WORKSPACE}/.cache/pip"
+            export PIP_DISABLE_PIP_VERSION_CHECK=1
 
-      cd backend
+            cd backend
+            python -m venv .venv || true
+            . .venv/bin/activate || true
 
-      python -m venv .venv || true
-      . .venv/bin/activate || true
+            python -m pip install --no-cache-dir pytest pytest-mock pytest-cov || true
+            mkdir -p ../reports
 
-      # Install testing tools
-      python -m pip install --no-cache-dir pytest pytest-mock pytest-cov || true
+            pytest --maxfail=1 \
+                --junitxml=../reports/pytest-results.xml \
+                --cov=. \
+                --cov-report=xml:../reports/coverage.xml \
+                --cov-report=term || true
 
-      mkdir -p ../reports
+            # Fail if no tests ran
+            if [ ! -s ../reports/pytest-results.xml ]; then
+                echo "ERROR: No tests were found! Failing the build."
+                exit 1
+            fi
 
-      # Run tests
-      pytest --maxfail=1 \
-             --junitxml=../reports/pytest-results.xml \
-             --cov=. \
-             --cov-report=xml:../reports/coverage.xml \
-             --cov-report=term \
-             || true
-
-      # Check if any tests ran
-      if [ ! -s ../reports/pytest-results.xml ]; then
-        echo "ERROR: No tests were found! Failing the build."
-        exit 1
-      fi
-
-      # Freeze installed packages
-      python -m pip freeze > ../reports/requirements-freeze-tests.txt || true
-    '''
-    stash includes: 'reports/**', name: 'test-reports', allowEmpty: true
-  }
-
-  post {
-    always {
-      catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
-        unstash 'test-reports'
-      }
-      archiveArtifacts artifacts: 'reports/**/*', allowEmptyArchive: true
-      junit testResults: 'reports/pytest-results.xml', allowEmptyResults: false
+            python -m pip freeze > ../reports/requirements-freeze-tests.txt || true
+        '''
+        stash includes: 'reports/**', name: 'test-reports', allowEmpty: true
     }
-    failure {
-      echo "Unit tests stage failed; check console output and reports/ for details."
+    post {
+        always {
+            catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                unstash 'test-reports'
+            }
+            archiveArtifacts artifacts: 'reports/**/*', allowEmptyArchive: true
+            junit testResults: 'reports/pytest-results.xml', allowEmptyResults: false
+        }
+        failure {
+            echo "Unit tests stage failed; check console output and reports/ for details."
+        }
     }
-  }
-} // end Unit Tests stage
+}
+ // end Unit Tests stage
 
   } // end stages
 
