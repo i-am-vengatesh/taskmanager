@@ -23,14 +23,14 @@ pipeline {
 
     stage('Install Dependencies / Build (docker)') {
       agent {
-        node {
-          label 'blackkey'
+        
         docker {
           image 'python:3.11-slim'
+          label 'blackkey'
           // optional args: pass proxy env vars or mount cache if needed
           // args '-e HTTP_PROXY=$HTTP_PROXY -e HTTPS_PROXY=$HTTPS_PROXY -v ${WORKSPACE}/.cache:/root/.cache'
         }
-        }
+        
       }
       steps {
         sh '''
