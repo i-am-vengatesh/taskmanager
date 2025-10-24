@@ -70,8 +70,9 @@ pipeline {
 
     stage('Unit Tests (pytest)') {
       agent {
-        docker { 
-        args '-e HTTP_PROXY=$HTTP_PROXY -e HTTPS_PROXY=$HTTPS_PROXY -e NO_PROXY=$NO_PROXY'
+        docker {
+          image 'python:3.11-slim'
+          args '-e HTTP_PROXY=$HTTP_PROXY -e HTTPS_PROXY=$HTTPS_PROXY -e NO_PROXY=$NO_PROXY'
         }
       }
       steps {
@@ -87,54 +88,3 @@ pipeline {
 
           # Create & activate venv (safe even if created previously)
           python -m venv .venv || true
-          . .venv/bin/activate || true
-
-          # Avoid upgrading pip if network is flaky; use pip from venv
-          python -m pip install --no-cache-dir pytest pytest-mock pytest-cov || true
-
-          # Ensure reports dir exists at workspace root
-          mkdir -p ../reports
-
-          # Run tests; produce JUnit xml and coverage xml
-          pytest -q --maxfail=1 \
-            --junitxml=../reports/pytest-results.xml \
-            --cov=. \
-            --cov-report=xml:../reports/coverage.xml \
-            --cov-report=term || true
-
-          # Freeze installed packages (helpful for debugging)
-          python -m pip freeze > ../reports/requirements-freeze-tests.txt || true
-        '''
-        // stash test reports for later archiving or other stages
-        stash includes: 'reports/**', name: 'test-reports', allowEmpty: true
-      }
-
-      post {
-        always {
-          // Unstash if available, then archive and publish test results (won't fail if missing)
-          catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
-            unstash 'test-reports'
-          }
-          archiveArtifacts artifacts: 'reports/**/*', allowEmptyArchive: true
-          junit testResults: 'reports/pytest-results.xml', allowEmptyResults: true
-        }
-        failure {
-          echo "Unit tests stage failed; check console output and reports/ for details."
-        }
-      }
-    } // end Unit Tests stage
-
-  } // end stages
-
-  post {
-    success {
-      echo "Pipeline completed successfully."
-    }
-    unstable {
-      echo "Pipeline finished unstable — check test results and reports."
-    }
-    failure {
-      echo "Pipeline failed — check console output."
-    }
-  }
-}
