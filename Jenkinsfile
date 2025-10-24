@@ -17,25 +17,37 @@ pipeline {
     }
 
     stage('Install Dependencies / Build (docker)') {
-      agent {
-        docker { image 'python:3.11-slim' }
-      }
-      steps {
-        sh '''
-          set -e
-          cd backend
-          python -m venv .venv
-          . .venv/bin/activate
-          pip install --upgrade pip
-          pip install -r requirements.txt
-
-          mkdir -p ../reports
-          pip freeze > ../reports/requirements-freeze.txt
-        '''
-        // Stash the file so it can be accessed outside the container
-        stash includes: 'reports/requirements-freeze.txt', name: 'freeze-report'
-      }
+  agent {
+    docker {
+      image 'python:3.11-slim'
+      // optional: pass docker args
+      // args '--network host -v ${WORKSPACE}/.cache:/root/.cache'
     }
+  }
+  steps {
+    sh '''
+      set -euo pipefail
+
+      # create a pip cache inside Jenkins workspace (writable)
+      mkdir -p "${WORKSPACE}/.cache/pip"
+      export PIP_CACHE_DIR="${WORKSPACE}/.cache/pip"
+
+      cd backend
+
+      python -m venv .venv
+      . .venv/bin/activate
+
+      # use python -m pip to avoid ambiguity, set timeout and avoid using pip's in-memory cache
+      python -m pip install --upgrade pip
+      python -m pip install --no-cache-dir --timeout 60 -r requirements.txt
+
+      mkdir -p ../reports
+      python -m pip freeze > ../reports/requirements-freeze.txt
+    '''
+    stash includes: 'reports/requirements-freeze.txt', name: 'freeze-report'
+  }
+}
+
 
     stage('Archive Artifacts') {
       steps {
@@ -45,44 +57,36 @@ pipeline {
     }
 
     stage('Unit Tests (pytest)') {
-      agent {
-        docker { image 'python:3.11-slim' }
-      }
+  agent {
+    docker { image 'python:3.11-slim' }
+  }
+  steps {
+    sh '''
+      set -euo pipefail
 
-      steps {
-        // make sure we fail fast on any command error
-        sh '''
-          set -euo pipefail
+      mkdir -p "${WORKSPACE}/.cache/pip"
+      export PIP_CACHE_DIR="${WORKSPACE}/.cache/pip"
 
-          # Go to backend where tests and requirements live
-          cd backend
+      cd backend
+      python -m venv .venv
+      . .venv/bin/activate
 
-          # Create/activate a venv inside the container (keeps deps isolated)
-          python -m venv .venv
-          . .venv/bin/activate
+      python -m pip install --upgrade pip
+      python -m pip install --no-cache-dir --timeout 60 -r requirements.txt || true
+      python -m pip install --no-cache-dir pytest pytest-mock pytest-cov
 
-          # Upgrade pip and install runtime + test deps
-          pip install --upgrade pip
-          pip install -r requirements.txt || true
-          # Ensure testing libs present (safe to install even if already in requirements)
-          pip install pytest pytest-mock pytest-cov
+      mkdir -p ../reports
 
-          # Ensure workspace reports dir exists on the host workspace
-          mkdir -p ../reports
+      pytest -q --maxfail=1 \
+        --junitxml=../reports/pytest-results.xml \
+        --cov=./ \
+        --cov-report=xml:../reports/coverage.xml \
+        --cov-report=term
 
-          # Run pytest: produce junit XML and coverage XML outputs
-          pytest -q --maxfail=1 \
-            --junitxml=../reports/pytest-results.xml \
-            --cov=./ \
-            --cov-report=xml:../reports/coverage.xml \
-            --cov-report=term
-
-          # Save list of installed packages for debugging if needed
-          pip freeze > ../reports/requirements-freeze-tests.txt
-        '''
-        // stash results so later stages or archive step can access them outside the container
-        stash includes: 'reports/**', name: 'test-reports'
-      }
+      python -m pip freeze > ../reports/requirements-freeze-tests.txt
+    '''
+    stash includes: 'reports/**', name: 'test-reports'
+  }
 
       post {
         always {
