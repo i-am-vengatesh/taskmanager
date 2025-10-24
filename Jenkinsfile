@@ -1,5 +1,5 @@
 pipeline {
-  agent {label 'bapvedev100'}
+  agent {label 'blackkey'}
   stages {
     stage('Checkout') {
       steps {
