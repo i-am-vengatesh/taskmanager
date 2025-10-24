@@ -1,12 +1,7 @@
 pipeline {
     agent { label 'blackkey' }
 
-    environment {
-        PIP_DISABLE_PIP_VERSION_CHECK = '1'
-    }
-
     stages {
-
         stage('Checkout') {
             steps {
                 git branch: 'main',
@@ -21,49 +16,23 @@ pipeline {
             }
         }
 
-        stage('Install Dependencies / Build') {
-            agent {
-                docker {
-                    image 'vengateshbabu1605/taskmanager-ci:latest'
-                    label 'blackkey'
-                }
-            }
-            steps {
-                sh '''
-                    cd backend
-                    mkdir -p ../reports
-
-                    # Activate prebuilt virtual environment
-                    . .venv/bin/activate
-
-                    # Record installed packages
-                    python -m pip freeze > ../reports/requirements-freeze.txt
-                '''
-                stash includes: 'reports/requirements-freeze.txt', name: 'freeze-report'
-            }
-        }
-
-        stage('Archive Artifacts') {
-            steps {
-                unstash 'freeze-report'
-                archiveArtifacts artifacts: 'reports/requirements-freeze.txt'
-            }
-        }
-
         stage('Unit Tests (pytest)') {
             agent {
                 docker {
                     image 'vengateshbabu1605/taskmanager-ci:latest'
+                    label 'blackkey'
+                    // optional: mount workspace cache if needed
+                    // args '-v ${WORKSPACE}/.cache:/root/.cache'
                 }
             }
             steps {
                 sh '''
+                    # Move to backend folder
                     cd backend
                     export PYTHONPATH=$PWD
-                    mkdir -p ../reports
 
-                    # Activate prebuilt virtual environment
-                    . .venv/bin/activate
+                    # Ensure reports folder exists
+                    mkdir -p ../reports
 
                     # Run tests
                     pytest --maxfail=1 \
@@ -72,24 +41,37 @@ pipeline {
                            --cov-report=xml:../reports/coverage.xml \
                            --cov-report=term
 
-                    # Save installed packages after tests
+                    # Save installed packages for traceability
                     python -m pip freeze > ../reports/requirements-freeze-tests.txt
                 '''
-                stash includes: 'reports/**', name: 'test-reports'
+                // stash test reports for post actions
+                stash includes: 'reports/**', name: 'test-reports', allowEmpty: true
             }
             post {
                 always {
-                    unstash 'test-reports'
+                    // unstash and archive artifacts
+                    catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                        unstash 'test-reports'
+                    }
                     archiveArtifacts artifacts: 'reports/**/*', allowEmptyArchive: true
                     junit testResults: 'reports/pytest-results.xml'
+                }
+                failure {
+                    echo "Unit tests failed — check console output and reports."
                 }
             }
         }
     }
 
     post {
-        success { echo "Pipeline completed successfully." }
-        unstable { echo "Pipeline finished unstable — check test results and reports." }
-        failure { echo "Pipeline failed — check console output." }
+        success {
+            echo "Pipeline completed successfully."
+        }
+        unstable {
+            echo "Pipeline finished unstable — check test results and reports."
+        }
+        failure {
+            echo "Pipeline failed — check console output."
+        }
     }
 }
