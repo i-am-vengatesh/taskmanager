@@ -9,3 +9,6 @@ requests==2.31.0
 flake8==6.0.0                 # lint (optional)
 bandit==1.8.1                 # security scan (optional)
 pytest-cov
+fastapi
+uvicorn[standard]
+jinja2
