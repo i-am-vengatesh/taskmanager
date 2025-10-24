@@ -33,4 +33,13 @@ pipeline {
 }
     
   }
+
+  post {
+    always {
+      archiveArtifacts artifacts: 'reports/requirements-freeze.txt', allowEmptyArchive: true
+    }
+    failure {
+      echo "Dependency install or build failed — check pip output above."
+    }
+  }
 }
