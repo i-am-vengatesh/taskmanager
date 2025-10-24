@@ -19,7 +19,7 @@ pipeline {
     stage('Install Dependencies / Build') {
       agent {
         docker {
-          image 'your-dockerhub-username/taskmanager-ci:latest'
+          image 'vengateshbabu1605/taskmanager-ci:latest'
           label 'blackkey'
         }
       }
