@@ -20,63 +20,28 @@ pipeline {
       }
     }
 
-    stage('Prepare wheelhouse (optional)') {
-      when {
-        expression { return fileExists("${env.WORKSPACE}/wheelhouse") == false }
-      }
-      agent {
-        docker { image 'python:3.11-slim' }
-      }
-      steps {
-        sh '''
-          # This stage only runs when wheelhouse not present. If you do offline builds,
-          # you may skip running this on Jenkins and pre-populate wheelhouse manually.
-          mkdir -p "${WORKSPACE}/wheelhouse"
-          python -m venv .venv
-          . .venv/bin/activate
-          python -m pip install --upgrade pip setuptools wheel
-          python -m pip download --dest "${WORKSPACE}/wheelhouse" -r backend/requirements.txt || true
-          ls -la "${WORKSPACE}/wheelhouse" || true
-        '''
-      }
-    }
-
-    stage('Install Dependencies / Build (docker)') {
+    stage('Install Dependencies / Build') {
       agent {
         docker {
-          image 'python:3.11-slim'
-          args "-v ${WORKSPACE}/.cache:/root/.cache -v ${WORKSPACE}/wheelhouse:/wheelhouse"
+          image 'vengateshbabu1605/taskmanager-ci:latest'
+          label 'blackkey'
         }
       }
       steps {
         sh '''
           set -euo pipefail
-          mkdir -p "${WORKSPACE}/.cache/pip"
-          export PIP_CACHE_DIR="${WORKSPACE}/.cache/pip"
-
           cd backend
-          python -m venv .venv
-          . .venv/bin/activate
-          python -m pip install --upgrade pip setuptools wheel --no-cache-dir
-
-          # Prefer wheelhouse (offline). If empty or not applicable, fallback to network.
-          if [ -d /wheelhouse ] && [ "$(ls -A /wheelhouse 2>/dev/null || true)" != "" ]; then
-            echo "Installing from wheelhouse"
-            python -m pip install --no-index --find-links=/wheelhouse -r requirements.txt
-          else
-            echo "Wheelhouse empty or missing — installing from PyPI (network required)"
-            python -m pip install --no-cache-dir -r requirements.txt
-          fi
-
           mkdir -p ../reports
-          python -m pip freeze > ../reports/requirements-freeze.txt
+          python -m pip freeze > ../reports/requirements-freeze.txt || true
         '''
+        // stash the freeze; allowEmpty in case something went wrong earlier
         stash includes: 'reports/requirements-freeze.txt', name: 'freeze-report', allowEmpty: true
       }
     }
 
     stage('Archive Artifacts') {
       steps {
+        // unstash safely (won't fail the pipeline if stash is missing)
         catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
           unstash 'freeze-report'
         }
@@ -87,60 +52,52 @@ pipeline {
     stage('Unit Tests (pytest)') {
       agent {
         docker {
-          image 'python:3.11-slim'
-          args "-v ${WORKSPACE}/wheelhouse:/wheelhouse -v ${WORKSPACE}/.cache:/root/.cache"
+          image 'vengateshbabu1605/taskmanager-ci:latest'
+          label 'blackkey'
         }
       }
       steps {
         sh '''
           set -euo pipefail
-          mkdir -p "${WORKSPACE}/.cache/pip"
-          export PIP_CACHE_DIR="${WORKSPACE}/.cache/pip"
-          export PIP_DISABLE_PIP_VERSION_CHECK=1
-
           cd backend
           export PYTHONPATH=$PWD
-
-          python -m venv .venv
-          . .venv/bin/activate
-          python -m pip install --upgrade pip setuptools wheel --no-cache-dir
-
-          # Install from wheelhouse when available, fallback to network
-          if [ -d /wheelhouse ] && [ "$(ls -A /wheelhouse 2>/dev/null || true)" != "" ]; then
-            echo "Installing test deps from wheelhouse"
-            python -m pip install --no-index --find-links=/wheelhouse -r requirements.txt
-          else
-            echo "Installing test deps from PyPI (network required)"
-            python -m pip install --no-cache-dir -r requirements.txt
-          fi
-
           mkdir -p ../reports
 
-          # Run pytest (if tests fail, keep reports if created)
+          # Run tests (image already has dependencies)
           pytest --maxfail=1 \
-                --junitxml=../reports/pytest-results.xml \
-                --cov=. \
-                --cov-report=xml:../reports/coverage.xml \
-                --cov-report=term || true
+                 --junitxml=../reports/pytest-results.xml \
+                 --cov=. \
+                 --cov-report=xml:../reports/coverage.xml \
+                 --cov-report=term
 
           python -m pip freeze > ../reports/requirements-freeze-tests.txt || true
         '''
-        // stash even if empty; post will handle missing artifacts gracefully
+        // stash test reports; allowEmpty so stash won't fail if something crashed early
         stash includes: 'reports/**', name: 'test-reports', allowEmpty: true
       }
 
       post {
         always {
-          // unstash safely: catchError prevents failing if stash missing
+          // Unstash safely (catchError prevents "No such stash" exceptions)
           catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
             unstash 'test-reports'
           }
+
+          // Archive anything under reports (won't fail if empty)
           archiveArtifacts artifacts: 'reports/**/*', allowEmptyArchive: true
-          // require test xml; junit will error if missing and mark build unstable/failing
-          junit testResults: 'reports/pytest-results.xml', allowEmptyResults: false
+
+          // Require JUnit XML to exist and contain results; fail the stage if missing
+          script {
+            if (fileExists('reports/pytest-results.xml')) {
+              junit testResults: 'reports/pytest-results.xml', allowEmptyResults: false
+            } else {
+              // No test results means we should fail the build (prevents false success)
+              error('No test results found (reports/pytest-results.xml). Failing the build.')
+            }
+          }
         }
         failure {
-          echo "Unit tests stage failed; check console log."
+          echo "Unit tests stage failed; check console output and reports for details."
         }
       }
     } // end Unit Tests
