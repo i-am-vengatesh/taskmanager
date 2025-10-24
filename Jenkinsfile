@@ -81,6 +81,7 @@ pipeline {
             export PIP_DISABLE_PIP_VERSION_CHECK=1
 
             cd backend
+            export PYTHONPATH=$PWD
             python -m venv .venv || true
             . .venv/bin/activate || true
 
