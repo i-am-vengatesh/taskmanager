@@ -87,26 +87,24 @@ pipeline {
 
             cd backend
             export PYTHONPATH=$PWD
-            python -m venv .venv || true
-            . .venv/bin/activate || true
 
-            python -m pip install --no-cache-dir pytest pytest-mock pytest-cov || true
+            # Create virtualenv and install all dependencies
+            python -m venv .venv
+            . .venv/bin/activate
+            python -m pip install --upgrade pip setuptools wheel --no-cache-dir
+            python -m pip install --no-cache-dir -r requirements.txt
+
+            # Ensure reports dir exists
             mkdir -p ../reports
 
             # Run tests
             pytest --maxfail=1 \
-                --junitxml=../reports/pytest-results.xml \
-                --cov=. \
-                --cov-report=xml:../reports/coverage.xml \
-                --cov-report=term || true
+                   --junitxml=../reports/pytest-results.xml \
+                   --cov=. \
+                   --cov-report=xml:../reports/coverage.xml \
+                   --cov-report=term
 
-            # Fail if no tests ran
-            if [ ! -s ../reports/pytest-results.xml ]; then
-                echo "ERROR: No tests were found! Failing the build."
-                exit 1
-            fi
-
-            python -m pip freeze > ../reports/requirements-freeze-tests.txt || true
+            python -m pip freeze > ../reports/requirements-freeze-tests.txt
         '''
         stash includes: 'reports/**', name: 'test-reports', allowEmpty: true
     }
@@ -117,9 +115,6 @@ pipeline {
             }
             archiveArtifacts artifacts: 'reports/**/*', allowEmptyArchive: true
             junit testResults: 'reports/pytest-results.xml', allowEmptyResults: false
-        }
-        failure {
-            echo "Unit tests stage failed; check console output and reports/ for details."
         }
     }
 }
