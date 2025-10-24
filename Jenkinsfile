@@ -34,14 +34,12 @@ pipeline {
           mkdir -p ../reports
           python -m pip freeze > ../reports/requirements-freeze.txt || true
         '''
-        // stash the freeze; allowEmpty in case something went wrong earlier
         stash includes: 'reports/requirements-freeze.txt', name: 'freeze-report', allowEmpty: true
       }
     }
 
     stage('Archive Artifacts') {
       steps {
-        // unstash safely (won't fail the pipeline if stash is missing)
         catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
           unstash 'freeze-report'
         }
@@ -59,11 +57,20 @@ pipeline {
       steps {
         sh '''
           set -euo pipefail
+
           cd backend
           export PYTHONPATH=$PWD
           mkdir -p ../reports
 
-          # Run tests (image already has dependencies)
+          # Create & activate venv (optional since image may already have pip/py)
+          python -m venv .venv
+          . .venv/bin/activate
+
+          # Install only test dependencies (faster)
+          python -m pip install --upgrade pip setuptools wheel --no-cache-dir
+          python -m pip install --no-cache-dir pytest pytest-mock pytest-cov
+
+          # Run tests (tests import from logic.py, not app.py)
           pytest --maxfail=1 \
                  --junitxml=../reports/pytest-results.xml \
                  --cov=. \
@@ -72,36 +79,25 @@ pipeline {
 
           python -m pip freeze > ../reports/requirements-freeze-tests.txt || true
         '''
-        // stash test reports; allowEmpty so stash won't fail if something crashed early
         stash includes: 'reports/**', name: 'test-reports', allowEmpty: true
       }
-
       post {
         always {
-          // Unstash safely (catchError prevents "No such stash" exceptions)
           catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
             unstash 'test-reports'
           }
-
-          // Archive anything under reports (won't fail if empty)
           archiveArtifacts artifacts: 'reports/**/*', allowEmptyArchive: true
-
-          // Require JUnit XML to exist and contain results; fail the stage if missing
           script {
             if (fileExists('reports/pytest-results.xml')) {
               junit testResults: 'reports/pytest-results.xml', allowEmptyResults: false
             } else {
-              // No test results means we should fail the build (prevents false success)
               error('No test results found (reports/pytest-results.xml). Failing the build.')
             }
           }
         }
-        failure {
-          echo "Unit tests stage failed; check console output and reports for details."
-        }
       }
-    } // end Unit Tests
-  } // end stages
+    }
+  }
 
   post {
     success { echo "Pipeline completed successfully." }
