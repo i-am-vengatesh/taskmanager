@@ -23,14 +23,14 @@ pipeline {
       . .venv/bin/activate
       pip install --upgrade pip
       pip install -r requirements.txt
-      # Create reports directory in workspace root
-      mkdir -p ../reports
-      pip freeze > ../reports/requirements-freeze.txt
-        # Quick smoke test
-        python -c "import fastapi; print('fastapi OK', fastapi.__version__)"
-        
-      # Debug: list reports folder to confirm file creation
-      ls -la ../reports
+     # Write freeze file directly in workspace root
+      mkdir -p $WORKSPACE/reports
+      pip freeze > $WORKSPACE/reports/requirements-freeze.txt
+
+      # Smoke test
+      python -c "import fastapi; print('fastapi OK', fastapi.__version__)"
+    '''
+    sh 'ls -la $WORKSPACE/reports'  # Confirm file exists at absolute path
         
     '''
   }
