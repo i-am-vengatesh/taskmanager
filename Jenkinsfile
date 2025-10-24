@@ -24,9 +24,8 @@ pipeline {
       pip install --upgrade pip
       pip install -r requirements.txt
       # Create reports directory in workspace root
-      mkdir -p $WORKSPACE/reports
-      pip freeze > $WORKSPACE/reports/requirements-freeze.txt
-
+      mkdir -p ../reports
+      pip freeze > ../reports/requirements-freeze.txt
         # Quick smoke test
         python -c "import fastapi; print('fastapi OK', fastapi.__version__)"
     '''
