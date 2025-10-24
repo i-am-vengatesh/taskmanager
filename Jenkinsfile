@@ -43,4 +43,5 @@ post {
     echo "Dependency install or build failed — check pip output above."
   }
 }
+  }
 }
