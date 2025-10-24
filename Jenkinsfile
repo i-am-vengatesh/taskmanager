@@ -29,7 +29,7 @@ pipeline {
 
       # Smoke test
       python -c "import fastapi; print('fastapi OK', fastapi.__version__)"
-    '''
+    
     sh 'ls -la $WORKSPACE/reports'  # Confirm file exists at absolute path
         
     '''
