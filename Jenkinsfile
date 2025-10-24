@@ -49,6 +49,7 @@ pipeline {
       steps {
         sh '''
           cd backend
+          export PYTHONPATH=$PWD
           mkdir -p ../reports
 
           # Run tests
