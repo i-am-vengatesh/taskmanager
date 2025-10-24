@@ -2,11 +2,11 @@ pipeline {
     agent { label 'blackkey' }
 
     environment {
-        // Disable pip version check
         PIP_DISABLE_PIP_VERSION_CHECK = '1'
     }
 
     stages {
+        // -------------------------------
         stage('Checkout') {
             steps {
                 git branch: 'main',
@@ -15,12 +15,14 @@ pipeline {
             }
         }
 
+        // -------------------------------
         stage('Echo') {
             steps {
                 sh 'echo "Checkout successful: $(pwd)"; ls -la'
             }
         }
 
+        // -------------------------------
         stage('Install Dependencies / Build') {
             agent {
                 docker {
@@ -31,7 +33,15 @@ pipeline {
             steps {
                 sh '''
                     cd backend
-                    export PYTHONPATH=$PWD
+                    # Create virtual environment
+                    python -m venv .venv
+                    . .venv/bin/activate
+
+                    # Install all dependencies
+                    python -m pip install --upgrade pip setuptools wheel
+                    python -m pip install -r requirements.txt
+
+                    # Save installed packages for traceability
                     mkdir -p ../reports
                     python -m pip freeze > ../reports/requirements-freeze.txt
                 '''
@@ -39,6 +49,7 @@ pipeline {
             }
         }
 
+        // -------------------------------
         stage('Archive Artifacts') {
             steps {
                 unstash 'freeze-report'
@@ -46,6 +57,7 @@ pipeline {
             }
         }
 
+        // -------------------------------
         stage('Unit Tests (pytest)') {
             agent {
                 docker {
@@ -59,14 +71,21 @@ pipeline {
                     export PYTHONPATH=$PWD
                     mkdir -p ../reports
 
-                    # Run tests with coverage
-                    pytest --maxfail=1 \
-                           --junitxml=../reports/pytest-results.xml \
-                           --cov=. \
-                           --cov-report=xml:../reports/coverage.xml \
-                           --cov-report=term
+                    # Activate virtualenv
+                    . .venv/bin/activate
 
-                    # Freeze installed packages in test environment
+                    # Ensure dependencies installed
+                    python -m pip install --upgrade pip setuptools wheel
+                    python -m pip install -r requirements.txt
+
+                    # Run pytest with coverage
+                    python -m pytest --maxfail=1 \
+                                     --junitxml=../reports/pytest-results.xml \
+                                     --cov=. \
+                                     --cov-report=xml:../reports/coverage.xml \
+                                     --cov-report=term
+
+                    # Freeze dependencies in test environment
                     python -m pip freeze > ../reports/requirements-freeze-tests.txt
                 '''
                 stash includes: 'reports/**', name: 'test-reports'
@@ -82,7 +101,8 @@ pipeline {
                 }
             }
         }
-    }
+
+    } // end stages
 
     post {
         success { echo "Pipeline completed successfully." }
