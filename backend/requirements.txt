@@ -10,3 +10,4 @@ flake8==6.0.0                 # lint (optional)
 bandit==1.8.1                 # security scan (optional)
 pytest-cov
 jinja2
+python-multipart==0.0.6
