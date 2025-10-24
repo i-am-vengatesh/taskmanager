@@ -6,7 +6,7 @@ pipeline {
     }
 
     stages {
-        // -------------------------------
+
         stage('Checkout') {
             steps {
                 git branch: 'main',
@@ -15,14 +15,12 @@ pipeline {
             }
         }
 
-        // -------------------------------
         stage('Echo') {
             steps {
                 sh 'echo "Checkout successful: $(pwd)"; ls -la'
             }
         }
 
-        // -------------------------------
         stage('Install Dependencies / Build') {
             agent {
                 docker {
@@ -33,23 +31,18 @@ pipeline {
             steps {
                 sh '''
                     cd backend
-                    # Create virtual environment
-                    python -m venv .venv
+                    mkdir -p ../reports
+
+                    # Activate prebuilt virtual environment
                     . .venv/bin/activate
 
-                    # Install all dependencies
-                    python -m pip install --upgrade pip setuptools wheel
-                    python -m pip install -r requirements.txt
-
-                    # Save installed packages for traceability
-                    mkdir -p ../reports
+                    # Record installed packages
                     python -m pip freeze > ../reports/requirements-freeze.txt
                 '''
                 stash includes: 'reports/requirements-freeze.txt', name: 'freeze-report'
             }
         }
 
-        // -------------------------------
         stage('Archive Artifacts') {
             steps {
                 unstash 'freeze-report'
@@ -57,12 +50,10 @@ pipeline {
             }
         }
 
-        // -------------------------------
         stage('Unit Tests (pytest)') {
             agent {
                 docker {
                     image 'vengateshbabu1605/taskmanager-ci:latest'
-                    label 'blackkey'
                 }
             }
             steps {
@@ -71,21 +62,17 @@ pipeline {
                     export PYTHONPATH=$PWD
                     mkdir -p ../reports
 
-                    # Activate virtualenv
+                    # Activate prebuilt virtual environment
                     . .venv/bin/activate
 
-                    # Ensure dependencies installed
-                    python -m pip install --upgrade pip setuptools wheel
-                    python -m pip install -r requirements.txt
+                    # Run tests
+                    pytest --maxfail=1 \
+                           --junitxml=../reports/pytest-results.xml \
+                           --cov=. \
+                           --cov-report=xml:../reports/coverage.xml \
+                           --cov-report=term
 
-                    # Run pytest with coverage
-                    python -m pytest --maxfail=1 \
-                                     --junitxml=../reports/pytest-results.xml \
-                                     --cov=. \
-                                     --cov-report=xml:../reports/coverage.xml \
-                                     --cov-report=term
-
-                    # Freeze dependencies in test environment
+                    # Save installed packages after tests
                     python -m pip freeze > ../reports/requirements-freeze-tests.txt
                 '''
                 stash includes: 'reports/**', name: 'test-reports'
@@ -96,13 +83,9 @@ pipeline {
                     archiveArtifacts artifacts: 'reports/**/*', allowEmptyArchive: true
                     junit testResults: 'reports/pytest-results.xml'
                 }
-                failure {
-                    echo "Unit tests stage failed; check console output and reports."
-                }
             }
         }
-
-    } // end stages
+    }
 
     post {
         success { echo "Pipeline completed successfully." }
