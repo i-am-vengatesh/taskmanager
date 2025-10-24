@@ -46,8 +46,10 @@ pipeline {
           python -m venv .venv
           . .venv/bin/activate
 
-          # Use python -m pip to avoid ambiguity and avoid writing to root cache
+          # Use python -m pip to avoid ambiguity and avoid writing to root cache and
+          # Install full requirements (FastAPI + test libs)
           python -m pip install --upgrade pip setuptools wheel --no-cache-dir || true
+          python -m pip install --no-cache-dir -r requirements.txt
 
           # Install runtime dependencies; if network is unavailable, allow failure for now (remove || true later)
           python -m pip install --no-cache-dir -r requirements.txt || true
