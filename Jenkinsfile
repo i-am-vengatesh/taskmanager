@@ -6,6 +6,7 @@ pipeline {
     }
 
     stages {
+
         stage('Checkout') {
             steps {
                 git branch: 'main',
@@ -20,7 +21,7 @@ pipeline {
             }
         }
 
-        stage('Install / Build') {
+        stage('Install Dependencies / Build') {
             agent {
                 docker {
                     image 'vengateshbabu1605/taskmanager-ci:latest'
@@ -31,6 +32,11 @@ pipeline {
                 sh '''
                     cd backend
                     mkdir -p ../reports
+
+                    # Sanity check installed packages
+                    python -c "import fastapi, httpx, pytest, python_multipart; print('Dependencies OK')"
+
+                    # Record installed packages for traceability
                     python -m pip freeze > ../reports/requirements-freeze.txt
                 '''
                 stash includes: 'reports/requirements-freeze.txt', name: 'freeze-report'
@@ -57,7 +63,7 @@ pipeline {
                     export PYTHONPATH=$PWD
                     mkdir -p ../reports
 
-                    # Sanity check: ensure dependencies exist
+                    # Sanity check dependencies before running tests
                     python -c "import fastapi, httpx; print('Deps OK')"
 
                     # Run tests
@@ -67,6 +73,7 @@ pipeline {
                            --cov-report=xml:../reports/coverage.xml \
                            --cov-report=term
 
+                    # Capture installed packages
                     python -m pip freeze > ../reports/requirements-freeze-tests.txt
                 '''
                 stash includes: 'reports/**', name: 'test-reports'
@@ -79,7 +86,8 @@ pipeline {
                 }
             }
         }
-    }
+
+    } // end stages
 
     post {
         success { echo "Pipeline completed successfully." }
