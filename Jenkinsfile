@@ -2,12 +2,10 @@ pipeline {
   agent { label 'blackkey' }
 
   environment {
-    // Disable pip version check (already baked in Docker image)
     PIP_DISABLE_PIP_VERSION_CHECK = '1'
   }
 
   stages {
-
     stage('Checkout') {
       steps {
         git branch: 'main',
@@ -32,9 +30,17 @@ pipeline {
       steps {
         sh '''
           cd backend
-          mkdir -p ../reports
 
-          # Record installed packages for traceability
+          # Ensure virtualenv exists
+          python -m venv .venv
+          . .venv/bin/activate
+
+          # Upgrade pip and install all requirements
+          python -m pip install --upgrade pip setuptools wheel --no-cache-dir
+          python -m pip install --no-cache-dir -r requirements.txt
+
+          # Create reports folder and record installed packages
+          mkdir -p ../reports
           python -m pip freeze > ../reports/requirements-freeze.txt
         '''
         stash includes: 'reports/requirements-freeze.txt', name: 'freeze-report'
@@ -57,17 +63,25 @@ pipeline {
       steps {
         sh '''
           cd backend
+
+          # Ensure PYTHONPATH points to backend folder
           export PYTHONPATH=$PWD
+
+          # Activate virtualenv
+          . .venv/bin/activate
+
+          # Ensure reports directory exists
           mkdir -p ../reports
 
-          # Run tests with coverage
-          pytest --maxfail=1 \
-                 --junitxml=../reports/pytest-results.xml \
-                 --cov=. \
-                 --cov-report=xml:../reports/coverage.xml \
-                 --cov-report=term
+          # Run pytest explicitly on tests folder
+          pytest tests/ \
+              --maxfail=1 \
+              --junitxml=../reports/pytest-results.xml \
+              --cov=. \
+              --cov-report=xml:../reports/coverage.xml \
+              --cov-report=term
 
-          # Freeze packages for this stage
+          # Record installed packages after test run
           python -m pip freeze > ../reports/requirements-freeze-tests.txt
         '''
         stash includes: 'reports/**', name: 'test-reports'
@@ -79,7 +93,7 @@ pipeline {
           junit testResults: 'reports/pytest-results.xml'
         }
         failure {
-          echo "Unit tests stage failed — check console output and reports/ for details."
+          echo "Unit tests stage failed; check console output and reports/ for details."
         }
       }
     }
