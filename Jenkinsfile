@@ -69,61 +69,63 @@ pipeline {
     }
 
     stage('Unit Tests (pytest)') {
-      agent {
-        docker {
-          image 'python:3.11-slim'
-          args '-e HTTP_PROXY=$HTTP_PROXY -e HTTPS_PROXY=$HTTPS_PROXY -e NO_PROXY=$NO_PROXY'
-        }
+  agent {
+    docker {
+      image 'python:3.11-slim'
+      args '-e HTTP_PROXY=$HTTP_PROXY -e HTTPS_PROXY=$HTTPS_PROXY -e NO_PROXY=$NO_PROXY'
+    }
+  }
+  steps {
+    sh '''
+      set -euo pipefail
+
+      mkdir -p "${WORKSPACE}/.cache/pip"
+      export PIP_CACHE_DIR="${WORKSPACE}/.cache/pip"
+      export PIP_DISABLE_PIP_VERSION_CHECK=1
+
+      cd backend
+
+      python -m venv .venv || true
+      . .venv/bin/activate || true
+
+      # Install testing tools
+      python -m pip install --no-cache-dir pytest pytest-mock pytest-cov || true
+
+      mkdir -p ../reports
+
+      # Run tests
+      pytest --maxfail=1 \
+             --junitxml=../reports/pytest-results.xml \
+             --cov=. \
+             --cov-report=xml:../reports/coverage.xml \
+             --cov-report=term \
+             || true
+
+      # Check if any tests ran
+      if [ ! -s ../reports/pytest-results.xml ]; then
+        echo "ERROR: No tests were found! Failing the build."
+        exit 1
+      fi
+
+      # Freeze installed packages
+      python -m pip freeze > ../reports/requirements-freeze-tests.txt || true
+    '''
+    stash includes: 'reports/**', name: 'test-reports', allowEmpty: true
+  }
+
+  post {
+    always {
+      catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+        unstash 'test-reports'
       }
-      steps {
-        sh '''
-          set -euo pipefail
-
-          # Ensure workspace pip cache dir exists and is writable
-          mkdir -p "${WORKSPACE}/.cache/pip"
-          export PIP_CACHE_DIR="${WORKSPACE}/.cache/pip"
-          export PIP_DISABLE_PIP_VERSION_CHECK=1
-
-          cd backend
-
-          # Create & activate venv (safe even if created previously)
-          python -m venv .venv || true
-          . .venv/bin/activate || true
-
-          # Avoid upgrading pip if network is flaky; use pip from venv
-          python -m pip install --no-cache-dir pytest pytest-mock pytest-cov || true
-
-          # Ensure reports dir exists at workspace root
-          mkdir -p ../reports
-
-          # Run tests; produce JUnit xml and coverage xml
-          pytest -q --maxfail=1 \
-            --junitxml=../reports/pytest-results.xml \
-            --cov=. \
-            --cov-report=xml:../reports/coverage.xml \
-            --cov-report=term || true
-
-          # Freeze installed packages (helpful for debugging)
-          python -m pip freeze > ../reports/requirements-freeze-tests.txt || true
-        '''
-        // stash test reports for later archiving or other stages
-        stash includes: 'reports/**', name: 'test-reports', allowEmpty: true
-      }
-
-      post {
-        always {
-          // Unstash if available, then archive and publish test results (won't fail if missing)
-          catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
-            unstash 'test-reports'
-          }
-          archiveArtifacts artifacts: 'reports/**/*', allowEmptyArchive: true
-          junit testResults: 'reports/pytest-results.xml', allowEmptyResults: true
-        }
-        failure {
-          echo "Unit tests stage failed; check console output and reports/ for details."
-        }
-      }
-    } // end Unit Tests stage
+      archiveArtifacts artifacts: 'reports/**/*', allowEmptyArchive: true
+      junit testResults: 'reports/pytest-results.xml', allowEmptyResults: false
+    }
+    failure {
+      echo "Unit tests stage failed; check console output and reports/ for details."
+    }
+  }
+} // end Unit Tests stage
 
   } // end stages
 
