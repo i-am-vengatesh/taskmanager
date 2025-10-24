@@ -12,5 +12,21 @@ pipeline {
         sh 'echo "Checkout successful: $(pwd)"; ls -la'
       }
     }
+  stage('Install Dependencies / Build (docker)') {
+  agent {
+    docker { image 'python:3.11-slim' }
+  }
+  steps {
+    sh '''
+      cd backend
+      python -m venv .venv
+      . .venv/bin/activate
+      pip install --upgrade pip
+      pip install -r requirements.txt
+      pip freeze > ../reports/requirements-freeze.txt
+    '''
+  }
+}
+    
   }
 }
