@@ -31,6 +31,7 @@ pipeline {
             steps {
                 sh '''
                     cd backend
+                    export PYTHONPATH=$PWD
                     mkdir -p ../reports
                     python -m pip freeze > ../reports/requirements-freeze.txt
                 '''
