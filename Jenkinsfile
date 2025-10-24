@@ -100,4 +100,5 @@ pipeline {
       echo "Unit tests failed — see reports/pytest-results.xml and console log for details."
     }
   }
+  }
 }
