@@ -1,6 +1,6 @@
 # backend/tests/test_app.py
 
-from app import add_task, remove_task, get_tasks
+from logic import add_task, remove_task, get_tasks
 
 def test_add_task():
     tasks = []
