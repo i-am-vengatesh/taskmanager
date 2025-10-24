@@ -23,6 +23,8 @@ pipeline {
       . .venv/bin/activate
       pip install --upgrade pip
       pip install -r requirements.txt
+      # Create reports directory before writing freeze file
+      mkdir -p ../reports
       pip freeze > ../reports/requirements-freeze.txt
     '''
   }
