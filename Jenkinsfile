@@ -1,9 +1,12 @@
 pipeline {
-  agent {label 'blackkey'}
+  agent { label 'blackkey' }
+
   stages {
     stage('Checkout') {
       steps {
-        git branch: 'main', url: 'https://github.com/i-am-vengatesh/taskmanager.git', credentialsId: 'git-creds'
+        git branch: 'main',
+            url: 'https://github.com/i-am-vengatesh/taskmanager.git',
+            credentialsId: 'git-creds'
       }
     }
 
@@ -42,63 +45,70 @@ pipeline {
     }
 
     stage('Unit Tests (pytest)') {
-  agent {
-    docker { image 'python:3.11-slim' }
-  }
-  steps {
-    // make sure we fail fast on any command error
-    sh '''
-      set -euo pipefail
+      agent {
+        docker { image 'python:3.11-slim' }
+      }
 
-      # Go to backend where tests and requirements live
-      cd backend
+      steps {
+        // make sure we fail fast on any command error
+        sh '''
+          set -euo pipefail
 
-      # Create/activate a venv inside the container (keeps deps isolated)
-      python -m venv .venv
-      . .venv/bin/activate
+          # Go to backend where tests and requirements live
+          cd backend
 
-      # Upgrade pip and install runtime + test deps
-      pip install --upgrade pip
-      pip install -r requirements.txt || true
-      # Ensure testing libs present (safe to install even if already in requirements)
-      pip install pytest pytest-mock pytest-cov
+          # Create/activate a venv inside the container (keeps deps isolated)
+          python -m venv .venv
+          . .venv/bin/activate
 
-      # Ensure workspace reports dir exists on the host workspace
-      mkdir -p ../reports
+          # Upgrade pip and install runtime + test deps
+          pip install --upgrade pip
+          pip install -r requirements.txt || true
+          # Ensure testing libs present (safe to install even if already in requirements)
+          pip install pytest pytest-mock pytest-cov
 
-      # Run pytest: produce junit XML and coverage HTML/xml outputs
-      pytest -q --maxfail=1 \
-        --junitxml=../reports/pytest-results.xml \
-        --cov=./ \
-        --cov-report=xml:../reports/coverage.xml \
-        --cov-report=term
+          # Ensure workspace reports dir exists on the host workspace
+          mkdir -p ../reports
 
-      # Save list of installed packages for debugging if needed
-      pip freeze > ../reports/requirements-freeze-tests.txt
-    '''
+          # Run pytest: produce junit XML and coverage XML outputs
+          pytest -q --maxfail=1 \
+            --junitxml=../reports/pytest-results.xml \
+            --cov=./ \
+            --cov-report=xml:../reports/coverage.xml \
+            --cov-report=term
 
-    // stash results so later stages or archive step can access them outside the container
-    stash includes: 'reports/**', name: 'test-reports'
-  }
+          # Save list of installed packages for debugging if needed
+          pip freeze > ../reports/requirements-freeze-tests.txt
+        '''
+        // stash results so later stages or archive step can access them outside the container
+        stash includes: 'reports/**', name: 'test-reports'
+      }
 
+      post {
+        always {
+          // Unstash and archive test artifacts for this stage
+          catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+            unstash 'test-reports'
+          }
+          archiveArtifacts artifacts: 'reports/**/*', allowEmptyArchive: true
 
+          // Publish JUnit results if present (won't fail the pipeline if missing)
+          junit testResults: 'reports/pytest-results.xml', allowEmptyResults: true
+        }
+        failure {
+          echo "Unit tests failed — see reports/pytest-results.xml and console log for details."
+        }
+      }
+    } // end Unit Tests stage
 
-    
-  }
+  } // end stages
 
   post {
-    always {
-      // make test artifacts available to the Jenkins master/workspace
-      unstash 'test-reports'
-      archiveArtifacts artifacts: 'reports/**/*', allowEmptyArchive: false
-
-      // Publish JUnit results so Jenkins shows test status
-      junit allowEmptyResults: false, testResults: 'reports/pytest-results.xml'
-    }
     failure {
-      echo "Dependency install or build failed — check pip output above."
-      echo "Unit tests failed — see reports/pytest-results.xml and console log for details."
+      echo "Pipeline failed — check the console output for errors."
     }
-  }
+    success {
+      echo "Pipeline completed successfully."
+    }
   }
 }
