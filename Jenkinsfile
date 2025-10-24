@@ -88,6 +88,7 @@ pipeline {
             python -m pip install --no-cache-dir pytest pytest-mock pytest-cov || true
             mkdir -p ../reports
 
+            # Run tests
             pytest --maxfail=1 \
                 --junitxml=../reports/pytest-results.xml \
                 --cov=. \
