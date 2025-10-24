@@ -28,6 +28,10 @@ pipeline {
       pip freeze > ../reports/requirements-freeze.txt
         # Quick smoke test
         python -c "import fastapi; print('fastapi OK', fastapi.__version__)"
+        
+      # Debug: list reports folder to confirm file creation
+      ls -la ../reports
+        
     '''
   }
 }
