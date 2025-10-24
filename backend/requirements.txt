@@ -1,0 +1,10 @@
+fastapi==0.95.0
+uvicorn[standard]==0.22.0
+SQLAlchemy==2.0.19
+databases==0.6.3              # optional
+psycopg2-binary==2.9.7        # only if you use Postgres locally
+pytest==7.4.0
+pytest-mock==3.10.0
+requests==2.31.0
+flake8==6.0.0                 # lint (optional)
+bandit==1.8.1                 # security scan (optional)
