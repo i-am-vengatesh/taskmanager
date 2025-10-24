@@ -27,6 +27,7 @@ cd backend
 
   mkdir -p ../reports
   pip freeze > ../reports/requirements-freeze.txt
+  ls -la ../reports
 
   
 
