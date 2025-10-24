@@ -70,8 +70,9 @@ pipeline {
 
     stage('Unit Tests (pytest)') {
       agent {
-        docker { image 'python:3.11-slim' }
+        docker { 
         args '-e HTTP_PROXY=$HTTP_PROXY -e HTTPS_PROXY=$HTTPS_PROXY -e NO_PROXY=$NO_PROXY'
+        }
       }
       steps {
         sh '''
