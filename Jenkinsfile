@@ -26,6 +26,8 @@ pipeline {
       # Create reports directory before writing freeze file
       mkdir -p ../reports
       pip freeze > ../reports/requirements-freeze.txt
+      # run a quick smoke test (no heavy tests here)
+        python -c "import fastapi; print('fastapi OK', fastapi.__version__)"
     '''
   }
 }
