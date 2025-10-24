@@ -26,6 +26,9 @@ pipeline {
       # Create reports directory in workspace root
       mkdir -p reports
       pip freeze > reports/requirements-freeze.txt
+      
+      # Copy to workspace root so Jenkins can archive it
+      cp reports/requirements-freeze.txt $WORKSPACE/
 
         # Quick smoke test
         python -c "import fastapi; print('fastapi OK', fastapi.__version__)"
@@ -37,7 +40,7 @@ pipeline {
 
   post {
     always {
-      archiveArtifacts artifacts: 'backend/reports/requirements-freeze.txt', allowEmptyArchive: true
+      archiveArtifacts artifacts: 'requirements-freeze.txt', allowEmptyArchive: true
     }
     failure {
       echo "Dependency install or build failed — check pip output above."
